@@ -51,3 +51,9 @@ jobs:
         name: coverage-report-${{ matrix.python-version }}
         path: htmlcov
 
+
+###  Have to :
+
+# Settings → Actions → General
+# "Workflow permissions" setup as "Read and write permissions"
+
