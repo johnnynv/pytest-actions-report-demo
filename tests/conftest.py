@@ -3,14 +3,14 @@ import pytest
 
 @pytest.fixture
 def math_ops():
-    from src.math_ops import MathOperations
+    from pytestshow.math_ops import MathOperations
 
     return MathOperations()
 
 
 @pytest.fixture
 def string_ops():
-    from src.string_ops import StringOperations
+    from pytestshow.string_ops import StringOperations
 
     return StringOperations()
 

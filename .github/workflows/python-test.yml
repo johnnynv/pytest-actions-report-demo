@@ -17,22 +17,19 @@ jobs:
       with:
         python-version: "3.11"
 
-    - name: Install package in editable mode
+    - name: Install dependencies
       run: |
         pip install -e .
         pip install pytest pytest-html pytest-cov
 
     - name: Run tests with coverage
       run: |
-        cd tests  # 确保在tests目录执行
-        PYTHONPATH=../src pytest \
-          --cov=../src \
+        PYTHONPATH=$PYTHONPATH:$GITHUB_WORKSPACE pytest \
+          --cov=pytestshow \
           --cov-report=xml \
           --html=report.html \
-          --self-contained-html
-
-    - name: Move report to root
-      run: mv tests/report.html ./
+          --self-contained-html \
+          tests/
 
     - name: Generate summary
       run: |

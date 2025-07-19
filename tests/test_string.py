@@ -1,5 +1,5 @@
 import pytest
-from src.string_ops import StringOperations
+from pytestshow.string_ops import StringOperations
 
 
 @pytest.mark.fast

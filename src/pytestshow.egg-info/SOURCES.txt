@@ -1,0 +1,11 @@
+README.md
+setup.py
+src/pytestshow/__init__.py
+src/pytestshow/math_ops.py
+src/pytestshow/string_ops.py
+src/pytestshow.egg-info/PKG-INFO
+src/pytestshow.egg-info/SOURCES.txt
+src/pytestshow.egg-info/dependency_links.txt
+src/pytestshow.egg-info/top_level.txt
+tests/test_math.py
+tests/test_string.py
