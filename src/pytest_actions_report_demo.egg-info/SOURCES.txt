@@ -1,0 +1,8 @@
+README.md
+setup.py
+src/pytest_actions_report_demo.egg-info/PKG-INFO
+src/pytest_actions_report_demo.egg-info/SOURCES.txt
+src/pytest_actions_report_demo.egg-info/dependency_links.txt
+src/pytest_actions_report_demo.egg-info/top_level.txt
+tests/test_math.py
+tests/test_string.py
