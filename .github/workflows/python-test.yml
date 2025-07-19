@@ -43,7 +43,8 @@ jobs:
         
         echo "PASSED=$passed" >> $GITHUB_OUTPUT
         echo "FAILED=$failed" >> $GITHUB_OUTPUT
-        echo "PYVER=${matrix.python-version}" >> $GITHUB_OUTPUT
+        echo "PYVER=${{ matrix.python-version }}" >> $GITHUB_OUTPUT
+      shell: bash
 
     - name: Save results
       uses: actions/upload-artifact@v4
