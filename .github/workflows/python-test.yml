@@ -28,8 +28,8 @@ jobs:
         pip install -e .
         pip install pytest pytest-html pytest-cov
 
-    - name: Run tests
-      id: run-tests
+    - name: Run tests and set results
+      id: tests
       run: |
         cd tests
         PYTHONPATH=../src pytest \
@@ -39,15 +39,19 @@ jobs:
           --html=../report-${{ matrix.python-version }}.html \
           --self-contained-html
         
+        # 直接从HTML报告提取测试结果
         passed=$(grep -oP '(?<=<td>passed</td><td>)\d+' ../report-${{ matrix.python-version }}.html || echo "0")
         failed=$(grep -oP '(?<=<td>failed</td><td>)\d+' ../report-${{ matrix.python-version }}.html || echo "0")
         
-        echo "PASSED=$passed" >> $GITHUB_OUTPUT
-        echo "FAILED=$failed" >> $GITHUB_OUTPUT
-        echo "PYVER=${{ matrix.python-version }}" >> $GITHUB_OUTPUT
+        # 设置输出变量
+        echo "passed=$passed" >> $GITHUB_OUTPUT
+        echo "failed=$failed" >> $GITHUB_OUTPUT
+        
+        # 直接写入summary文件
+        echo "| ${{ matrix.python-version }} | $passed | $failed |" >> $GITHUB_STEP_SUMMARY
       shell: bash
 
-    - name: Save results
+    - name: Save test artifacts
       uses: actions/upload-artifact@v4
       with:
         name: test-results-py${{ matrix.python-version }}
@@ -56,26 +60,22 @@ jobs:
           coverage-${{ matrix.python-version }}.xml
           test-results-${{ matrix.python-version }}.xml
 
-    - name: Set env vars
-      run: |
-        PY_VER=$(echo "${{ matrix.python-version }}" | tr '.' '_')
-        echo "PY${PY_VER}_PASSED=${{ steps.run-tests.outputs.PASSED || 0 }}" >> $GITHUB_ENV
-        echo "PY${PY_VER}_FAILED=${{ steps.run-tests.outputs.FAILED || 0 }}" >> $GITHUB_ENV
-
   summary:
     needs: test
     runs-on: ubuntu-latest
     steps:
-      - name: Generate summary
+      - name: Generate final summary
         run: |
-          echo "### 🧪 Combined Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "### 🧪 Test Results Summary" >> $GITHUB_STEP_SUMMARY
           echo "| Python Version | Passed | Failed |" >> $GITHUB_STEP_SUMMARY
-          echo "|----------------|--------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| 3.8 | ${PY3_8_PASSED} | ${PY3_8_FAILED} |" >> $GITHUB_STEP_SUMMARY
-          echo "| 3.9 | ${PY3_9_PASSED} | ${PY3_9_FAILED} |" >> $GITHUB_STEP_SUMMARY
-          echo "| 3.10 | ${PY3_10_PASSED} | ${PY3_10_FAILED} |" >> $GITHUB_STEP_SUMMARY
-          echo "| 3.11 | ${PY3_11_PASSED} | ${PY3_11_FAILED} |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------------|--------|--------|" >> $GITHUB_STEP_SUMMARY
+          
+          # 汇总所有版本的结果
+          echo "| 3.8 | ${{ needs.test.outputs.python-3_8-passed || '0' }} | ${{ needs.test.outputs.python-3_8-failed || '0' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 3.9 | ${{ needs.test.outputs.python-3_9-passed || '0' }} | ${{ needs.test.outputs.python-3_9-failed || '0' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 3.10 | ${{ needs.test.outputs.python-3_10-passed || '0' }} | ${{ needs.test.outputs.python-3_10-failed || '0' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 3.11 | ${{ needs.test.outputs.python-3_11-passed || '0' }} | ${{ needs.test.outputs.python-3_11-failed || '0' }} |" >> $GITHUB_STEP_SUMMARY
+          
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "📊 [Download All Reports](https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)" >> $GITHUB_STEP_SUMMARY
-
+          echo "📊 [View Detailed Reports]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)" >> $GITHUB_STEP_SUMMARY
 
