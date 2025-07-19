@@ -43,9 +43,10 @@ jobs:
         passed=$(grep -A1 '<td>passed</td>' ../report-${{ matrix.python-version }}.html | grep -o '[0-9]\+' || echo "0")
         failed=$(grep -A1 '<td>failed</td>' ../report-${{ matrix.python-version }}.html | grep -o '[0-9]\+' || echo "0")
         
-        # 设置环境变量（使用更简单的命名）
-        echo "PY${matrix.python-version | replace('.', '')}_PASSED=$passed" >> $GITHUB_ENV
-        echo "PY${matrix.python-version | replace('.', '')}_FAILED=$failed" >> $GITHUB_ENV
+        # 使用纯bash方式处理版本号
+        PY_VER=$(echo "${{ matrix.python-version }}" | tr -d '.')
+        echo "PY${PY_VER}_PASSED=$passed" >> $GITHUB_ENV
+        echo "PY${PY_VER}_FAILED=$failed" >> $GITHUB_ENV
         
         echo "Test results - Python ${{ matrix.python-version }}: Passed=$passed, Failed=$failed"
       shell: bash
@@ -80,4 +81,7 @@ jobs:
           echo "Debug Info:" >> $GITHUB_STEP_SUMMARY
           echo "PY38_PASSED=${PY38_PASSED:-not-set}" >> $GITHUB_STEP_SUMMARY
           echo "PY39_PASSED=${PY39_PASSED:-not-set}" >> $GITHUB_STEP_SUMMARY
+          echo "PY310_PASSED=${PY310_PASSED:-not-set}" >> $GITHUB_STEP_SUMMARY
+          echo "PY311_PASSED=${PY311_PASSED:-not-set}" >> $GITHUB_STEP_SUMMARY
         shell: bash
+
