@@ -57,12 +57,10 @@ jobs:
           test-results-${{ matrix.python-version }}.xml
 
     - name: Set env vars
-      env:
-        PY_VER: ${{ matrix.python-version | replace('.', '_') }}
       run: |
-        echo "PY${PY_VER}_PASSED=0" >> $GITHUB_ENV
-        echo "PY${PY_VER}_FAILED=0" >> $GITHUB_ENV
-
+        PY_VER=$(echo "${{ matrix.python-version }}" | tr '.' '_')
+        echo "PY${PY_VER}_PASSED=${{ steps.run-tests.outputs.PASSED || 0 }}" >> $GITHUB_ENV
+        echo "PY${PY_VER}_FAILED=${{ steps.run-tests.outputs.FAILED || 0 }}" >> $GITHUB_ENV
 
   summary:
     needs: test
@@ -79,4 +77,5 @@ jobs:
           echo "| 3.11 | ${PY3_11_PASSED} | ${PY3_11_FAILED} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "📊 [Download All Reports](https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)" >> $GITHUB_STEP_SUMMARY
+
 
