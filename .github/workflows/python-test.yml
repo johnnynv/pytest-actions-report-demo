@@ -2,10 +2,9 @@ name: Python CI
 
 on: [push, pull_request]
 
-# 最小权限声明（不依赖仓库全局设置）
 permissions:
-  checks: write  # 仅用于更新检查状态
-  contents: read # 默认已有，显式声明更安全
+  checks: write  # 仅需检查状态写入权限
+  contents: read
 
 jobs:
   test:
@@ -18,21 +17,34 @@ jobs:
       with:
         python-version: "3.11"
 
-    - name: Run tests
+    - name: Install package in editable mode
       run: |
-        pip install pytest pytest-html
-        pytest --html=report.html --self-contained-html
+        pip install -e .
+        pip install pytest pytest-html pytest-cov
 
-    - name: Upload HTML Report
+    - name: Run tests with coverage
+      run: |
+        cd tests  # 确保在tests目录执行
+        PYTHONPATH=../src pytest \
+          --cov=../src \
+          --cov-report=xml \
+          --html=report.html \
+          --self-contained-html
+
+    - name: Move report to root
+      run: mv tests/report.html ./
+
+    - name: Generate summary
+      run: |
+        echo "### 📊 Test Results" >> $GITHUB_STEP_SUMMARY
+        echo "- 🔍 [Download HTML Report](https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)" >> $GITHUB_STEP_SUMMARY
+        grep -o 'passed.*</td>\|failed.*</td>' report.html | sed 's/<.*//' >> $GITHUB_STEP_SUMMARY
+
+    - name: Upload reports
       uses: actions/upload-artifact@v4
       with:
-        name: pytest-report
-        path: report.html
-
-    - name: Show Summary
-      run: |
-        echo "### 📊 Pytest Results" >> $GITHUB_STEP_SUMMARY
-        echo "- 🔍 [Download Full Report](https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ Passed: $(grep -o 'passed.*' report.html | cut -d'<' -f1)" >> $GITHUB_STEP_SUMMARY
-        echo "- ❌ Failed: $(grep -o 'failed.*' report.html | cut -d'<' -f1)" >> $GITHUB_STEP_SUMMARY
+        name: test-reports
+        path: |
+          report.html
+          coverage.xml
 
