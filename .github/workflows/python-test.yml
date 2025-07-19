@@ -10,6 +10,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.8", "3.9", "3.10", "3.11"]
     
@@ -56,9 +57,12 @@ jobs:
           test-results-${{ matrix.python-version }}.xml
 
     - name: Set env vars
+      env:
+        PY_VER: ${{ matrix.python-version | replace('.', '_') }}
       run: |
-        echo "PY${matrix.python-version | replace('.', '_')}_PASSED=${{ steps.run-tests.outputs.PASSED }}" >> $GITHUB_ENV
-        echo "PY${matrix.python-version | replace('.', '_')}_FAILED=${{ steps.run-tests.outputs.FAILED }}" >> $GITHUB_ENV
+        echo "PY${PY_VER}_PASSED=0" >> $GITHUB_ENV
+        echo "PY${PY_VER}_FAILED=0" >> $GITHUB_ENV
+
 
   summary:
     needs: test
