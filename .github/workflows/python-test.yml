@@ -3,45 +3,70 @@ name: Python CI
 on: [push, pull_request]
 
 permissions:
-  checks: write  # 仅需检查状态写入权限
+  checks: write
   contents: read
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.8", "3.9", "3.10", "3.11"]
+        os: [ubuntu-latest]
+
     steps:
     - uses: actions/checkout@v4
     
-    - name: Set up Python
+    - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v4
       with:
-        python-version: "3.11"
+        python-version: ${{ matrix.python-version }}
 
     - name: Install dependencies
       run: |
+        python -m pip install --upgrade pip
         pip install -e .
         pip install pytest pytest-html pytest-cov
 
-    - name: Run tests with coverage
+    - name: Run tests
       run: |
-        PYTHONPATH=$PYTHONPATH:$GITHUB_WORKSPACE pytest \
-          --cov=pytestshow \
-          --cov-report=xml \
-          --html=report.html \
-          --self-contained-html \
-          tests/
+        cd tests
+        PYTHONPATH=../src pytest \
+          --cov=../src \
+          --cov-report=xml:../coverage-${{ matrix.python-version }}.xml \
+          --junitxml=../test-results-${{ matrix.python-version }}.xml \
+          --html=../report-${{ matrix.python-version }}.html \
+          --self-contained-html
+        cd ..
 
-    - name: Generate summary
+    - name: Parse test results
+      id: test-results
       run: |
-        echo "### 📊 Test Results" >> $GITHUB_STEP_SUMMARY
-        echo "- 🔍 [Download HTML Report](https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)" >> $GITHUB_STEP_SUMMARY
-        grep -o 'passed.*</td>\|failed.*</td>' report.html | sed 's/<.*//' >> $GITHUB_STEP_SUMMARY
+        echo "summary=$(grep -A 1 '<td>passed</td>' report-${{ matrix.python-version }}.html | tail -n 1 | sed 's/<[^>]*>//g')" >> $GITHUB_OUTPUT
+        echo "failed=$(grep -A 1 '<td>failed</td>' report-${{ matrix.python-version }}.html | tail -n 1 | sed 's/<[^>]*>//g')" >> $GITHUB_OUTPUT
 
     - name: Upload reports
       uses: actions/upload-artifact@v4
       with:
-        name: test-reports
+        name: test-reports-py${{ matrix.python-version }}
         path: |
-          report.html
-          coverage.xml
+          report-${{ matrix.python-version }}.html
+          coverage-${{ matrix.python-version }}.xml
+          test-results-${{ matrix.python-version }}.xml
+
+  summary:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate test summary
+        run: |
+          echo "### 🧪 Combined Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "| Python Version | Passed | Failed |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------------|--------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 3.8 | ${{ needs.test.outputs.py38-summary }} | ${{ needs.test.outputs.py38-failed }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 3.9 | ${{ needs.test.outputs.py39-summary }} | ${{ needs.test.outputs.py39-failed }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 3.10 | ${{ needs.test.outputs.py310-summary }} | ${{ needs.test.outputs.py310-failed }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 3.11 | ${{ needs.test.outputs.py311-summary }} | ${{ needs.test.outputs.py311-failed }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📊 [Download All Reports](https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)" >> $GITHUB_STEP_SUMMARY
 
