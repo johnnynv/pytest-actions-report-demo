@@ -1,2 +1,2 @@
 # pytest-actions-report-demo
-Make github actions can show pytest result demo
+This is a demo that github actions can show pytest result in PR
