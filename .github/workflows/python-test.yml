@@ -32,7 +32,6 @@ jobs:
       id: run-tests
       run: |
         cd tests
-        # 运行测试并生成报告
         PYTHONPATH=../src pytest \
           --cov=../src \
           --cov-report=xml:../coverage-${{ matrix.python-version }}.xml \
@@ -40,21 +39,15 @@ jobs:
           --html=../report-${{ matrix.python-version }}.html \
           --self-contained-html
         
-        # 直接从HTML报告提取测试结果（更可靠的方式）
-        passed=$(awk '/<td>passed<\/td><td>/ {getline; print}' ../report-${{ matrix.python-version }}.html | grep -o '[0-9]\+' || echo "0")
-        failed=$(awk '/<td>failed<\/td><td>/ {getline; print}' ../report-${{ matrix.python-version }}.html | grep -o '[0-9]\+' || echo "0")
+        # 更可靠的测试结果提取方式
+        passed=$(grep -A1 '<td>passed</td>' ../report-${{ matrix.python-version }}.html | grep -o '[0-9]\+' || echo "0")
+        failed=$(grep -A1 '<td>failed</td>' ../report-${{ matrix.python-version }}.html | grep -o '[0-9]\+' || echo "0")
         
-        # 设置输出变量
-        echo "PASSED=$passed" >> $GITHUB_OUTPUT
-        echo "FAILED=$failed" >> $GITHUB_OUTPUT
+        # 设置环境变量（使用更简单的命名）
+        echo "PY${matrix.python-version | replace('.', '')}_PASSED=$passed" >> $GITHUB_ENV
+        echo "PY${matrix.python-version | replace('.', '')}_FAILED=$failed" >> $GITHUB_ENV
         
-        # 为summary job设置环境变量
-        PY_VER=$(echo "${{ matrix.python-version }}" | tr '.' '_')
-        echo "PY${PY_VER}_PASSED=$passed" >> $GITHUB_ENV
-        echo "PY${PY_VER}_FAILED=$failed" >> $GITHUB_ENV
-        
-        # 打印结果用于调试
-        echo "Test results for Python ${{ matrix.python-version }}: Passed=$passed, Failed=$failed"
+        echo "Test results - Python ${{ matrix.python-version }}: Passed=$passed, Failed=$failed"
       shell: bash
 
     - name: Upload test artifacts
@@ -72,17 +65,19 @@ jobs:
     steps:
       - name: Generate final report
         run: |
+          # 创建Markdown表格
           echo "### 🧪 Test Results Summary" >> $GITHUB_STEP_SUMMARY
           echo "| Python Version | Passed | Failed |" >> $GITHUB_STEP_SUMMARY
           echo "|----------------|--------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| 3.8 | ${PY3_8_PASSED:-0} | ${PY3_8_FAILED:-0} |" >> $GITHUB_STEP_SUMMARY
-          echo "| 3.9 | ${PY3_9_PASSED:-0} | ${PY3_9_FAILED:-0} |" >> $GITHUB_STEP_SUMMARY
-          echo "| 3.10 | ${PY3_10_PASSED:-0} | ${PY3_10_FAILED:-0} |" >> $GITHUB_STEP_SUMMARY
-          echo "| 3.11 | ${PY3_11_PASSED:-0} | ${PY3_11_FAILED:-0} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 3.8 | ${PY38_PASSED:-0} | ${PY38_FAILED:-0} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 3.9 | ${PY39_PASSED:-0} | ${PY39_FAILED:-0} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 3.10 | ${PY310_PASSED:-0} | ${PY310_FAILED:-0} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 3.11 | ${PY311_PASSED:-0} | ${PY311_FAILED:-0} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "📊 [View Detailed Reports]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)" >> $GITHUB_STEP_SUMMARY
           
-          # 打印环境变量用于调试
-          echo "Current environment variables:"
-          printenv | grep PY
-
+          # 调试信息
+          echo "Debug Info:" >> $GITHUB_STEP_SUMMARY
+          echo "PY38_PASSED=${PY38_PASSED:-not-set}" >> $GITHUB_STEP_SUMMARY
+          echo "PY39_PASSED=${PY39_PASSED:-not-set}" >> $GITHUB_STEP_SUMMARY
+        shell: bash
