@@ -61,7 +61,8 @@ jobs:
         echo "⚠️ XPassed: $xpassed"
         echo "::endgroup::"
 
-        echo "PYVER=${{ matrix.python-version | replace('.', '') }}" >> $GITHUB_ENV
+        # 使用 bash 处理版本号，而不是在表达式内
+        PY_VER=$(echo ${{ matrix.python-version }} | tr -d '.')
         echo "passed=$actual_passed" >> $GITHUB_OUTPUT
         echo "failed=$failures" >> $GITHUB_OUTPUT
         echo "skipped=$skipped" >> $GITHUB_OUTPUT
@@ -110,4 +111,3 @@ jobs:
           echo "| 3.11 | ${PY311_PASSED:-0} | ${PY311_FAILED:-0} | ${PY311_SKIPPED:-0} | ${PY311_ERRORS:-0} | ${PY311_XFAILED:-0} | ${PY311_XPASSED:-0} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "📊 [View Detailed Reports]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)" >> $GITHUB_STEP_SUMMARY
-        
