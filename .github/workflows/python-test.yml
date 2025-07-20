@@ -40,27 +40,27 @@ jobs:
         # 运行测试并捕获原始控制台输出
         TEST_OUTPUT=$(PYTHONPATH=../src pytest \
           --cov=../src \
-          --cov-report=xml:../coverage-${{ matrix.python-version }}.xml \
-          --junitxml:../test-results-${{ matrix.python-version }}.xml \
-          --html:../report-${{ matrix.python-version }}.html \
+          --cov-report=xml:../coverage-3.10.xml \
+          --junitxml=../test-results-3.10.xml \
+          --html=../report-3.10.html \
           --self-contained-html 2>&1)
         
         # 精确解析测试结果
-        passed=$(xmllint --xpath 'count(//testcase[not(skipped) and not(failure) and not(error)])' ../test-results-${{ matrix.python-version }}.xml || echo "0")
-        failures=$(xmllint --xpath 'count(//testcase[failure])' ../test-results-${{ matrix.python-version }}.xml || echo "0")
-        errors=$(xmllint --xpath 'count(//testcase[error])' ../test-results-${{ matrix.python-version }}.xml || echo "0")
-        skipped=$(xmllint --xpath 'count(//testcase[skipped])' ../test-results-${{ matrix.python-version }}.xml || echo "0")
-        xfailed=$(xmllint --xpath 'count(//testcase[contains(@name, "[xfail]")])' ../test-results-${{ matrix.python-version }}.xml || echo "0")
-        xpassed=$(xmllint --xpath 'count(//testcase[contains(@name, "[xpass]")])' ../test-results-${{ matrix.python-version }}.xml || echo "0")
+        passed=$(xmllint --xpath 'count(//testcase[not(skipped) and not(failure) and not(error)])' ../test-results-3.10.xml || echo "0")
+        failures=$(xmllint --xpath 'count(//testcase[failure])' ../test-results-3.10.xml || echo "0")
+        errors=$(xmllint --xpath 'count(//testcase[error])' ../test-results-3.10.xml || echo "0")
+        skipped=$(xmllint --xpath 'count(//testcase[skipped])' ../test-results-3.10.xml || echo "0")
+        xfailed=$(xmllint --xpath 'count(//testcase[contains(@name, "[xfail]")])' ../test-results-3.10.xml || echo "0")
+        xpassed=$(xmllint --xpath 'count(//testcase[contains(@name, "[xpass]")])' ../test-results-3.10.xml || echo "0")
         actual_passed=$((passed - xpassed))
-
+        
         # 输出详细测试结果
-        echo "::group::📊 Python ${{ matrix.python-version }} Test Results"
+        echo "::group::📊 Python 3.10 Test Results"
         echo "$TEST_OUTPUT"
         echo "::endgroup::"
         
         # 输出格式化摘要到step summary
-        echo "### 🔍 Python ${{ matrix.python-version }} Test Summary" >> $GITHUB_STEP_SUMMARY
+        echo "### 🔍 Python 3.10 Test Summary" >> $GITHUB_STEP_SUMMARY
         echo "| Metric | Count |" >> $GITHUB_STEP_SUMMARY
         echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
         echo "| ✅ Passed | $actual_passed |" >> $GITHUB_STEP_SUMMARY
@@ -70,9 +70,9 @@ jobs:
         echo "| 🔶 XFailed | $xfailed |" >> $GITHUB_STEP_SUMMARY
         echo "| ⚠️ XPassed | $xpassed |" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-
+        
         # 设置输出变量
-        PY_VER=$(echo "${{ matrix.python-version }}" | tr -d '.')
+        PY_VER=$(echo "3.10" | tr -d '.')
         echo "PY${PY_VER}_PASSED=$actual_passed" >> $GITHUB_ENV
         echo "PY${PY_VER}_FAILED=$failures" >> $GITHUB_ENV
         echo "PY${PY_VER}_SKIPPED=$skipped" >> $GITHUB_ENV
