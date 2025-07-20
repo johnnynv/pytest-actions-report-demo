@@ -37,13 +37,15 @@ jobs:
       id: run-tests
       run: |
         cd tests
-        PYTHONPATH=../src pytest \
+        # 运行测试并捕获原始控制台输出
+        TEST_OUTPUT=$(PYTHONPATH=../src pytest \
           --cov=../src \
           --cov-report=xml:../coverage-${{ matrix.python-version }}.xml \
-          --junitxml=../test-results-${{ matrix.python-version }}.xml \
-          --html=../report-${{ matrix.python-version }}.html \
-          --self-contained-html
+          --junitxml:../test-results-${{ matrix.python-version }}.xml \
+          --html:../report-${{ matrix.python-version }}.html \
+          --self-contained-html 2>&1)
         
+        # 精确解析测试结果
         passed=$(xmllint --xpath 'count(//testcase[not(skipped) and not(failure) and not(error)])' ../test-results-${{ matrix.python-version }}.xml || echo "0")
         failures=$(xmllint --xpath 'count(//testcase[failure])' ../test-results-${{ matrix.python-version }}.xml || echo "0")
         errors=$(xmllint --xpath 'count(//testcase[error])' ../test-results-${{ matrix.python-version }}.xml || echo "0")
@@ -52,23 +54,31 @@ jobs:
         xpassed=$(xmllint --xpath 'count(//testcase[contains(@name, "[xpass]")])' ../test-results-${{ matrix.python-version }}.xml || echo "0")
         actual_passed=$((passed - xpassed))
 
-        echo "::group::📊 Python ${{ matrix.python-version }} Test Summary"
-        echo "✅ Passed: $actual_passed"
-        echo "❌ Failed: $failures"
-        echo "⏩ Skipped: $skipped"
-        echo "💥 Errors: $errors"
-        echo "🔶 XFailed: $xfailed"
-        echo "⚠️ XPassed: $xpassed"
+        # 输出详细测试结果
+        echo "::group::📊 Python ${{ matrix.python-version }} Test Results"
+        echo "$TEST_OUTPUT"
         echo "::endgroup::"
+        
+        # 输出格式化摘要到step summary
+        echo "### 🔍 Python ${{ matrix.python-version }} Test Summary" >> $GITHUB_STEP_SUMMARY
+        echo "| Metric | Count |" >> $GITHUB_STEP_SUMMARY
+        echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+        echo "| ✅ Passed | $actual_passed |" >> $GITHUB_STEP_SUMMARY
+        echo "| ❌ Failed | $failures |" >> $GITHUB_STEP_SUMMARY
+        echo "| ⏩ Skipped | $skipped |" >> $GITHUB_STEP_SUMMARY
+        echo "| 💥 Errors | $errors |" >> $GITHUB_STEP_SUMMARY
+        echo "| 🔶 XFailed | $xfailed |" >> $GITHUB_STEP_SUMMARY
+        echo "| ⚠️ XPassed | $xpassed |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
 
-        # 使用 bash 处理版本号，而不是在表达式内
-        PY_VER=$(echo ${{ matrix.python-version }} | tr -d '.')
-        echo "passed=$actual_passed" >> $GITHUB_OUTPUT
-        echo "failed=$failures" >> $GITHUB_OUTPUT
-        echo "skipped=$skipped" >> $GITHUB_OUTPUT
-        echo "errors=$errors" >> $GITHUB_OUTPUT
-        echo "xfailed=$xfailed" >> $GITHUB_OUTPUT
-        echo "xpassed=$xpassed" >> $GITHUB_OUTPUT
+        # 设置输出变量
+        PY_VER=$(echo "${{ matrix.python-version }}" | tr -d '.')
+        echo "PY${PY_VER}_PASSED=$actual_passed" >> $GITHUB_ENV
+        echo "PY${PY_VER}_FAILED=$failures" >> $GITHUB_ENV
+        echo "PY${PY_VER}_SKIPPED=$skipped" >> $GITHUB_ENV
+        echo "PY${PY_VER}_ERRORS=$errors" >> $GITHUB_ENV
+        echo "PY${PY_VER}_XFAILED=$xfailed" >> $GITHUB_ENV
+        echo "PY${PY_VER}_XPASSED=$xpassed" >> $GITHUB_ENV
 
     - name: Upload test artifacts
       uses: actions/upload-artifact@v4
@@ -79,30 +89,13 @@ jobs:
           coverage-${{ matrix.python-version }}.xml
           test-results-${{ matrix.python-version }}.xml
 
-    outputs:
-      passed: ${{ steps.run-tests.outputs.passed }}
-      failed: ${{ steps.run-tests.outputs.failed }}
-      skipped: ${{ steps.run-tests.outputs.skipped }}
-      errors: ${{ steps.run-tests.outputs.errors }}
-      xfailed: ${{ steps.run-tests.outputs.xfailed }}
-      xpassed: ${{ steps.run-tests.outputs.xpassed }}
-
   summary:
     needs: test
     runs-on: ubuntu-latest
     steps:
-      - name: Collect results
+      - name: Generate final report
         run: |
-          echo "PY38_PASSED=${{ needs.test.outputs.passed || '0' }}" >> $GITHUB_ENV
-          echo "PY38_FAILED=${{ needs.test.outputs.failed || '0' }}" >> $GITHUB_ENV
-          echo "PY38_SKIPPED=${{ needs.test.outputs.skipped || '0' }}" >> $GITHUB_ENV
-          echo "PY38_ERRORS=${{ needs.test.outputs.errors || '0' }}" >> $GITHUB_ENV
-          echo "PY38_XFAILED=${{ needs.test.outputs.xfailed || '0' }}" >> $GITHUB_ENV
-          echo "PY38_XPASSED=${{ needs.test.outputs.xpassed || '0' }}" >> $GITHUB_ENV
-
-      - name: Generate summary
-        run: |
-          echo "### 🧪 Test Results Summary" >> $GITHUB_STEP_SUMMARY
+          echo "### 🧪 Combined Test Results Summary" >> $GITHUB_STEP_SUMMARY
           echo "| Python Version | ✅ Passed | ❌ Failed | ⏩ Skipped | 💥 Errors | 🔶 XFailed | ⚠️ XPassed |" >> $GITHUB_STEP_SUMMARY
           echo "|----------------|----------|----------|-----------|----------|----------|----------|" >> $GITHUB_STEP_SUMMARY
           echo "| 3.8 | ${PY38_PASSED:-0} | ${PY38_FAILED:-0} | ${PY38_SKIPPED:-0} | ${PY38_ERRORS:-0} | ${PY38_XFAILED:-0} | ${PY38_XPASSED:-0} |" >> $GITHUB_STEP_SUMMARY
