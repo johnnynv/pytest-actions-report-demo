@@ -40,27 +40,33 @@ jobs:
         # 运行测试并捕获原始控制台输出
         TEST_OUTPUT=$(PYTHONPATH=../src pytest \
           --cov=../src \
-          --cov-report=xml:../coverage-3.10.xml \
-          --junitxml=../test-results-3.10.xml \
-          --html=../report-3.10.html \
+          --cov-report=xml:../coverage-${{ matrix.python-version }}.xml \
+          --junitxml=../test-results-${{ matrix.python-version }}.xml \
+          --html=../report-${{ matrix.python-version }}.html \
           --self-contained-html 2>&1)
         
+        # 保存原始输出供后续使用
+        echo "TEST_OUTPUT<<EOF" >> $GITHUB_ENV
+        echo "$TEST_OUTPUT" >> $GITHUB_ENV
+        echo "EOF" >> $GITHUB_ENV
+
         # 精确解析测试结果
-        passed=$(xmllint --xpath 'count(//testcase[not(skipped) and not(failure) and not(error)])' ../test-results-3.10.xml || echo "0")
-        failures=$(xmllint --xpath 'count(//testcase[failure])' ../test-results-3.10.xml || echo "0")
-        errors=$(xmllint --xpath 'count(//testcase[error])' ../test-results-3.10.xml || echo "0")
-        skipped=$(xmllint --xpath 'count(//testcase[skipped])' ../test-results-3.10.xml || echo "0")
-        xfailed=$(xmllint --xpath 'count(//testcase[contains(@name, "[xfail]")])' ../test-results-3.10.xml || echo "0")
-        xpassed=$(xmllint --xpath 'count(//testcase[contains(@name, "[xpass]")])' ../test-results-3.10.xml || echo "0")
+        passed=$(xmllint --xpath 'count(//testcase[not(skipped) and not(failure) and not(error)])' ../test-results-${{ matrix.python-version }}.xml || echo "0")
+        failures=$(xmllint --xpath 'count(//testcase[failure])' ../test-results-${{ matrix.python-version }}.xml || echo "0")
+        errors=$(xmllint --xpath 'count(//testcase[error])' ../test-results-${{ matrix.python-version }}.xml || echo "0")
+        skipped=$(xmllint --xpath 'count(//testcase[skipped])' ../test-results-${{ matrix.python-version }}.xml || echo "0")
+        xfailed=$(xmllint --xpath 'count(//testcase[contains(@name, "[xfail]")])' ../test-results-${{ matrix.python-version }}.xml || echo "0")
+        xpassed=$(xmllint --xpath 'count(//testcase[contains(@name, "[xpass]")])' ../test-results-${{ matrix.python-version }}.xml || echo "0")
         actual_passed=$((passed - xpassed))
+
+        # 输出详细测试结果到job摘要
+        echo "### 📊 Python ${{ matrix.python-version }} Detailed Results" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        echo "$TEST_OUTPUT" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
         
-        # 输出详细测试结果
-        echo "::group::📊 Python 3.10 Test Results"
-        echo "$TEST_OUTPUT"
-        echo "::endgroup::"
-        
-        # 输出格式化摘要到step summary
-        echo "### 🔍 Python 3.10 Test Summary" >> $GITHUB_STEP_SUMMARY
+        # 输出格式化摘要
+        echo "### 🔍 Test Summary" >> $GITHUB_STEP_SUMMARY
         echo "| Metric | Count |" >> $GITHUB_STEP_SUMMARY
         echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
         echo "| ✅ Passed | $actual_passed |" >> $GITHUB_STEP_SUMMARY
@@ -69,16 +75,14 @@ jobs:
         echo "| 💥 Errors | $errors |" >> $GITHUB_STEP_SUMMARY
         echo "| 🔶 XFailed | $xfailed |" >> $GITHUB_STEP_SUMMARY
         echo "| ⚠️ XPassed | $xpassed |" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        
+
         # 设置输出变量
-        PY_VER=$(echo "3.10" | tr -d '.')
-        echo "PY${PY_VER}_PASSED=$actual_passed" >> $GITHUB_ENV
-        echo "PY${PY_VER}_FAILED=$failures" >> $GITHUB_ENV
-        echo "PY${PY_VER}_SKIPPED=$skipped" >> $GITHUB_ENV
-        echo "PY${PY_VER}_ERRORS=$errors" >> $GITHUB_ENV
-        echo "PY${PY_VER}_XFAILED=$xfailed" >> $GITHUB_ENV
-        echo "PY${PY_VER}_XPASSED=$xpassed" >> $GITHUB_ENV
+        echo "passed=$actual_passed" >> $GITHUB_OUTPUT
+        echo "failed=$failures" >> $GITHUB_OUTPUT
+        echo "skipped=$skipped" >> $GITHUB_OUTPUT
+        echo "errors=$errors" >> $GITHUB_OUTPUT
+        echo "xfailed=$xfailed" >> $GITHUB_OUTPUT
+        echo "xpassed=$xpassed" >> $GITHUB_OUTPUT
 
     - name: Upload test artifacts
       uses: actions/upload-artifact@v4
@@ -89,18 +93,41 @@ jobs:
           coverage-${{ matrix.python-version }}.xml
           test-results-${{ matrix.python-version }}.xml
 
+    outputs:
+      passed: ${{ steps.run-tests.outputs.passed }}
+      failed: ${{ steps.run-tests.outputs.failed }}
+      skipped: ${{ steps.run-tests.outputs.skipped }}
+      errors: ${{ steps.run-tests.outputs.errors }}
+      xfailed: ${{ steps.run-tests.outputs.xfailed }}
+      xpassed: ${{ steps.run-tests.outputs.xpassed }}
+
   summary:
     needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Generate final report
         run: |
-          echo "### 🧪 Combined Test Results Summary" >> $GITHUB_STEP_SUMMARY
+          # 准备数据
+          declare -A results
+          for version in 3.8 3.9 3.10 3.11; do
+            py_ver=$(echo $version | tr -d '.')
+            job_id="test_$py_ver"
+            
+            results["${version}_passed"]=${{ fromJSON(needs.test.result.outputs.passed) || 0 }}
+            results["${version}_failed"]=${{ fromJSON(needs.test.result.outputs.failed) || 0 }}
+            results["${version}_skipped"]=${{ fromJSON(needs.test.result.outputs.skipped) || 0 }}
+            results["${version}_errors"]=${{ fromJSON(needs.test.result.outputs.errors) || 0 }}
+            results["${version}_xfailed"]=${{ fromJSON(needs.test.result.outputs.xfailed) || 0 }}
+            results["${version}_xpassed"]=${{ fromJSON(needs.test.result.outputs.xpassed) || 0 }}
+          done
+
+          # 生成最终报告
+          echo "### 🧪 Test Results Summary" >> $GITHUB_STEP_SUMMARY
           echo "| Python Version | ✅ Passed | ❌ Failed | ⏩ Skipped | 💥 Errors | 🔶 XFailed | ⚠️ XPassed |" >> $GITHUB_STEP_SUMMARY
           echo "|----------------|----------|----------|-----------|----------|----------|----------|" >> $GITHUB_STEP_SUMMARY
-          echo "| 3.8 | ${PY38_PASSED:-0} | ${PY38_FAILED:-0} | ${PY38_SKIPPED:-0} | ${PY38_ERRORS:-0} | ${PY38_XFAILED:-0} | ${PY38_XPASSED:-0} |" >> $GITHUB_STEP_SUMMARY
-          echo "| 3.9 | ${PY39_PASSED:-0} | ${PY39_FAILED:-0} | ${PY39_SKIPPED:-0} | ${PY39_ERRORS:-0} | ${PY39_XFAILED:-0} | ${PY39_XPASSED:-0} |" >> $GITHUB_STEP_SUMMARY
-          echo "| 3.10 | ${PY310_PASSED:-0} | ${PY310_FAILED:-0} | ${PY310_SKIPPED:-0} | ${PY310_ERRORS:-0} | ${PY310_XFAILED:-0} | ${PY310_XPASSED:-0} |" >> $GITHUB_STEP_SUMMARY
-          echo "| 3.11 | ${PY311_PASSED:-0} | ${PY311_FAILED:-0} | ${PY311_SKIPPED:-0} | ${PY311_ERRORS:-0} | ${PY311_XFAILED:-0} | ${PY311_XPASSED:-0} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 3.8 | ${results["3.8_passed"]} | ${results["3.8_failed"]} | ${results["3.8_skipped"]} | ${results["3.8_errors"]} | ${results["3.8_xfailed"]} | ${results["3.8_xpassed"]} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 3.9 | ${results["3.9_passed"]} | ${results["3.9_failed"]} | ${results["3.9_skipped"]} | ${results["3.9_errors"]} | ${results["3.9_xfailed"]} | ${results["3.9_xpassed"]} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 3.10 | ${results["3.10_passed"]} | ${results["3.10_failed"]} | ${results["3.10_skipped"]} | ${results["3.10_errors"]} | ${results["3.10_xfailed"]} | ${results["3.10_xpassed"]} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 3.11 | ${results["3.11_passed"]} | ${results["3.11_failed"]} | ${results["3.11_skipped"]} | ${results["3.11_errors"]} | ${results["3.11_xfailed"]} | ${results["3.11_xpassed"]} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "📊 [View Detailed Reports]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)" >> $GITHUB_STEP_SUMMARY
