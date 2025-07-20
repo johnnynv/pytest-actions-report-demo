@@ -44,18 +44,16 @@ jobs:
           --html=../report-${{ matrix.python-version }}.html \
           --self-contained-html
         
-        # 更精确的测试结果解析（包含 xpassed/xfailed）
+        # 精确解析测试结果
         passed=$(xmllint --xpath 'count(//testcase[not(skipped) and not(failure) and not(error)])' ../test-results-${{ matrix.python-version }}.xml || echo "0")
         failures=$(xmllint --xpath 'count(//testcase[failure])' ../test-results-${{ matrix.python-version }}.xml || echo "0")
         errors=$(xmllint --xpath 'count(//testcase[error])' ../test-results-${{ matrix.python-version }}.xml || echo "0")
         skipped=$(xmllint --xpath 'count(//testcase[skipped])' ../test-results-${{ matrix.python-version }}.xml || echo "0")
         xfailed=$(xmllint --xpath 'count(//testcase[contains(@name, "[xfail]")])' ../test-results-${{ matrix.python-version }}.xml || echo "0")
         xpassed=$(xmllint --xpath 'count(//testcase[contains(@name, "[xpass]")])' ../test-results-${{ matrix.python-version }}.xml || echo "0")
-
-        # 计算实际 passed（排除 xpassed）
         actual_passed=$((passed - xpassed))
 
-        # 输出当前 job 的结果摘要
+        # 输出当前 job 结果
         echo "::group::📊 Python ${{ matrix.python-version }} Test Summary"
         echo "✅ Passed: $actual_passed"
         echo "❌ Failed: $failures"
@@ -65,7 +63,15 @@ jobs:
         echo "⚠️ XPassed: $xpassed"
         echo "::endgroup::"
 
-        # 设置环境变量供后续步骤使用
+        # 将结果写入文件供 summary job 使用
+        echo "PY${PY_VER}_PASSED=$actual_passed" >> $GITHUB_OUTPUT
+        echo "PY${PY_VER}_FAILED=$failures" >> $GITHUB_OUTPUT
+        echo "PY${PY_VER}_SKIPPED=$skipped" >> $GITHUB_OUTPUT
+        echo "PY${PY_VER}_ERRORS=$errors" >> $GITHUB_OUTPUT
+        echo "PY${PY_VER}_XFAILED=$xfailed" >> $GITHUB_OUTPUT
+        echo "PY${PY_VER}_XPASSED=$xpassed" >> $GITHUB_OUTPUT
+
+        # 同时写入环境变量（兼容性）
         PY_VER=$(echo "${{ matrix.python-version }}" | tr -d '.')
         echo "PY${PY_VER}_PASSED=$actual_passed" >> $GITHUB_ENV
         echo "PY${PY_VER}_FAILED=$failures" >> $GITHUB_ENV
@@ -83,10 +89,30 @@ jobs:
           coverage-${{ matrix.python-version }}.xml
           test-results-${{ matrix.python-version }}.xml
 
+    # 输出结果供其他 job 使用
+    outputs:
+      py38_passed: ${{ steps.run-tests.outputs.PY38_PASSED }}
+      py38_failed: ${{ steps.run-tests.outputs.PY38_FAILED }}
+      py38_skipped: ${{ steps.run-tests.outputs.PY38_SKIPPED }}
+      py38_errors: ${{ steps.run-tests.outputs.PY38_ERRORS }}
+      py38_xfailed: ${{ steps.run-tests.outputs.PY38_XFAILED }}
+      py38_xpassed: ${{ steps.run-tests.outputs.PY38_XPASSED }}
+      # 为其他 Python 版本添加相同输出...
+
   summary:
     needs: test
     runs-on: ubuntu-latest
     steps:
+      - name: Collect test results
+        run: |
+          echo "PY38_PASSED=${{ needs.test.outputs.py38_passed || '0' }}" >> $GITHUB_ENV
+          echo "PY38_FAILED=${{ needs.test.outputs.py38_failed || '0' }}" >> $GITHUB_ENV
+          echo "PY38_SKIPPED=${{ needs.test.outputs.py38_skipped || '0' }}" >> $GITHUB_ENV
+          echo "PY38_ERRORS=${{ needs.test.outputs.py38_errors || '0' }}" >> $GITHUB_ENV
+          echo "PY38_XFAILED=${{ needs.test.outputs.py38_xfailed || '0' }}" >> $GITHUB_ENV
+          echo "PY38_XPASSED=${{ needs.test.outputs.py38_xpassed || '0' }}" >> $GITHUB_ENV
+          # 为其他 Python 版本添加相同环境变量...
+
       - name: Generate final report
         run: |
           echo "### 🧪 Test Results Summary" >> $GITHUB_STEP_SUMMARY
