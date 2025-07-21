@@ -1,4 +1,4 @@
-name: Python CI with Native Notifications
+name: Python CI with Native Email Notifications
 
 on:
   pull_request: {}
@@ -8,7 +8,8 @@ on:
 permissions:
   checks: write
   contents: read
-
+  pull-requests: write
+  statuses: write 
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -32,12 +33,11 @@ jobs:
         python -m pip install --upgrade pip
         pip install -e .
         pip install pytest pytest-html pytest-cov
-
     - name: Run tests and record results
       id: run-tests
       run: |
         cd tests
-        # 运行测试并捕获原始控制台输出
+        # Capture raw test output
         TEST_OUTPUT=$(PYTHONPATH=../src pytest \
           --cov=../src \
           --cov-report=xml:../coverage-${{ matrix.python-version }}.xml \
@@ -45,12 +45,11 @@ jobs:
           --html=../report-${{ matrix.python-version }}.html \
           --self-contained-html 2>&1)
         
-        # 保存原始输出供后续使用
+        # Save raw output
         echo "TEST_OUTPUT<<EOF" >> $GITHUB_ENV
         echo "$TEST_OUTPUT" >> $GITHUB_ENV
         echo "EOF" >> $GITHUB_ENV
-
-        # 精确解析测试结果
+        # Parse test results
         passed=$(xmllint --xpath 'count(//testcase[not(skipped) and not(failure) and not(error)])' ../test-results-${{ matrix.python-version }}.xml || echo "0")
         failures=$(xmllint --xpath 'count(//testcase[failure])' ../test-results-${{ matrix.python-version }}.xml || echo "0")
         errors=$(xmllint --xpath 'count(//testcase[error])' ../test-results-${{ matrix.python-version }}.xml || echo "0")
@@ -58,14 +57,12 @@ jobs:
         xfailed=$(xmllint --xpath 'count(//testcase[contains(@name, "[xfail]")])' ../test-results-${{ matrix.python-version }}.xml || echo "0")
         xpassed=$(xmllint --xpath 'count(//testcase[contains(@name, "[xpass]")])' ../test-results-${{ matrix.python-version }}.xml || echo "0")
         actual_passed=$((passed - xpassed))
-
-        # 输出详细测试结果到job摘要
+        # Output to job summary
         echo "### 📊 Python ${{ matrix.python-version }} Detailed Results" >> $GITHUB_STEP_SUMMARY
         echo '```' >> $GITHUB_STEP_SUMMARY
         echo "$TEST_OUTPUT" >> $GITHUB_STEP_SUMMARY
         echo '```' >> $GITHUB_STEP_SUMMARY
         
-        # 输出格式化摘要
         echo "### 🔍 Test Summary" >> $GITHUB_STEP_SUMMARY
         echo "| Metric | Count |" >> $GITHUB_STEP_SUMMARY
         echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
@@ -75,15 +72,13 @@ jobs:
         echo "| 💥 Errors | $errors |" >> $GITHUB_STEP_SUMMARY
         echo "| 🔶 XFailed | $xfailed |" >> $GITHUB_STEP_SUMMARY
         echo "| ⚠️ XPassed | $xpassed |" >> $GITHUB_STEP_SUMMARY
-
-        # 设置输出变量
+        # Set outputs
         echo "passed=$actual_passed" >> $GITHUB_OUTPUT
         echo "failed=$failures" >> $GITHUB_OUTPUT
         echo "skipped=$skipped" >> $GITHUB_OUTPUT
         echo "errors=$errors" >> $GITHUB_OUTPUT
         echo "xfailed=$xfailed" >> $GITHUB_OUTPUT
         echo "xpassed=$xpassed" >> $GITHUB_OUTPUT
-
     - name: Upload test artifacts
       uses: actions/upload-artifact@v4
       with:
@@ -92,7 +87,6 @@ jobs:
           report-${{ matrix.python-version }}.html
           coverage-${{ matrix.python-version }}.xml
           test-results-${{ matrix.python-version }}.xml
-
     outputs:
       passed: ${{ steps.run-tests.outputs.passed }}
       failed: ${{ steps.run-tests.outputs.failed }}
@@ -100,20 +94,6 @@ jobs:
       errors: ${{ steps.run-tests.outputs.errors }}
       xfailed: ${{ steps.run-tests.outputs.xfailed }}
       xpassed: ${{ steps.run-tests.outputs.xpassed }}
-
-  notify:
-    needs: test
-    runs-on: ubuntu-latest
-    if: always()
-    steps:
-      - name: Generate status notification
-        run: |
-          if [ ${{ needs.test.outputs.failed }} -gt 0 ] || [ ${{ needs.test.outputs.errors }} -gt 0 ]; then
-            echo "::error::❌ Tests failed! Failures: ${{ needs.test.outputs.failed }}, Errors: ${{ needs.test.outputs.errors }}"
-            echo "::notice::View report: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-          else
-            echo "::notice::✅ All tests passed! View report: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-          fi
 
   summary:
     needs: test
@@ -131,8 +111,45 @@ jobs:
           echo "| 3.11 | ${{ needs.test.outputs.passed }} | ${{ needs.test.outputs.failed }} | ${{ needs.test.outputs.skipped }} | ${{ needs.test.outputs.errors }} | ${{ needs.test.outputs.xfailed }} | ${{ needs.test.outputs.xpassed }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "📊 [View Detailed Reports]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)" >> $GITHUB_STEP_SUMMARY
-
           # Save summary for notification
           echo "FINAL_SUMMARY<<EOF" >> $GITHUB_ENV
           cat $GITHUB_STEP_SUMMARY >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
+
+      - name: Send notification
+        uses: actions/github-script@v6
+        if: always()  # Send even if tests fail
+        env:
+          SUMMARY: ${{ env.FINAL_SUMMARY }}
+        with:
+          script: |
+            // Determine overall status
+            const totalFailed = parseInt('${{ needs.test.outputs.failed }}');
+            const totalErrors = parseInt('${{ needs.test.outputs.errors }}');
+            const status = (totalFailed > 0 || totalErrors > 0) ? 'FAILED ❌' : 'PASSED ✅';
+            const emoji = (totalFailed > 0 || totalErrors > 0) ? '🔴' : '🟢';
+            // Create PR comment
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `
+              ${emoji} **CI Test Results** ${emoji}
+              **Status:** ${status}
+              **Triggered by:** @${{ github.actor }}
+              **Branch:** ${{ github.ref }}
+              ### 📊 Summary
+              ${{ env.SUMMARY }}
+              [View full report](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+              `
+            });
+            // Update commit status to trigger GitHub's native email
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: '${{ github.event.pull_request.head.sha }}',
+              state: (totalFailed > 0 || totalErrors > 0) ? 'failure' : 'success',
+              target_url: '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}',
+              description: `Tests ${status}`,
+              context: 'CI/Tests'
+            });
