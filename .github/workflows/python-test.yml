@@ -37,17 +37,20 @@ jobs:
       id: run-tests
       run: |
         cd tests
+        # 运行测试并捕获原始控制台输出
         TEST_OUTPUT=$(PYTHONPATH=../src pytest \
           --cov=../src \
           --cov-report=xml:../coverage-${{ matrix.python-version }}.xml \
-          --junitxml:../test-results-${{ matrix.python-version }}.xml \
-          --html:../report-${{ matrix.python-version }}.html \
+          --junitxml=../test-results-${{ matrix.python-version }}.xml \
+          --html=../report-${{ matrix.python-version }}.html \
           --self-contained-html 2>&1)
         
+        # 保存原始输出供后续使用
         echo "TEST_OUTPUT<<EOF" >> $GITHUB_ENV
         echo "$TEST_OUTPUT" >> $GITHUB_ENV
         echo "EOF" >> $GITHUB_ENV
 
+        # 精确解析测试结果
         passed=$(xmllint --xpath 'count(//testcase[not(skipped) and not(failure) and not(error)])' ../test-results-${{ matrix.python-version }}.xml || echo "0")
         failures=$(xmllint --xpath 'count(//testcase[failure])' ../test-results-${{ matrix.python-version }}.xml || echo "0")
         errors=$(xmllint --xpath 'count(//testcase[error])' ../test-results-${{ matrix.python-version }}.xml || echo "0")
@@ -56,12 +59,14 @@ jobs:
         xpassed=$(xmllint --xpath 'count(//testcase[contains(@name, "[xpass]")])' ../test-results-${{ matrix.python-version }}.xml || echo "0")
         actual_passed=$((passed - xpassed))
 
-        echo "### 📊 Python ${{ matrix.python-version }} Results" >> $GITHUB_STEP_SUMMARY
+        # 输出详细测试结果到job摘要
+        echo "### 📊 Python ${{ matrix.python-version }} Detailed Results" >> $GITHUB_STEP_SUMMARY
         echo '```' >> $GITHUB_STEP_SUMMARY
         echo "$TEST_OUTPUT" >> $GITHUB_STEP_SUMMARY
         echo '```' >> $GITHUB_STEP_SUMMARY
         
-        echo "### 🔍 Summary" >> $GITHUB_STEP_SUMMARY
+        # 输出格式化摘要
+        echo "### 🔍 Test Summary" >> $GITHUB_STEP_SUMMARY
         echo "| Metric | Count |" >> $GITHUB_STEP_SUMMARY
         echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
         echo "| ✅ Passed | $actual_passed |" >> $GITHUB_STEP_SUMMARY
@@ -71,6 +76,7 @@ jobs:
         echo "| 🔶 XFailed | $xfailed |" >> $GITHUB_STEP_SUMMARY
         echo "| ⚠️ XPassed | $xpassed |" >> $GITHUB_STEP_SUMMARY
 
+        # 设置输出变量
         echo "passed=$actual_passed" >> $GITHUB_OUTPUT
         echo "failed=$failures" >> $GITHUB_OUTPUT
         echo "skipped=$skipped" >> $GITHUB_OUTPUT
@@ -108,7 +114,7 @@ jobs:
           else
             echo "::notice::✅ All tests passed! View report: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           fi
-          
+
   summary:
     needs: test
     runs-on: ubuntu-latest
