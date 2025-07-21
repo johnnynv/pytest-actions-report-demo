@@ -1,5 +1,5 @@
 import pytest
-from src.math_ops import MathOperations
+from pytestshow.math_ops import MathOperations
 
 
 @pytest.mark.fast

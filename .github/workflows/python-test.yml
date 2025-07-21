@@ -1,53 +1,132 @@
 name: Python CI
 
-on: [push, pull_request]
+on:
+  pull_request: {}
+  push:
+    branches: [ main, release/* ]
+
+permissions:
+  checks: write
+  contents: read
 
 jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.8", "3.9", "3.10", "3.11"]
-
+    
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
-    
+
     - name: Install dependencies
       run: |
+        sudo apt-get update
+        sudo apt-get install -y libxml2-utils
         python -m pip install --upgrade pip
-        make install
-        
-    - name: Run tests with coverage and reports
-      run: |
-        make full
-        
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
-      with:
-        file: coverage.xml
-        flags: unittests
-        
-    - name: Publish Test Results
-      uses: EnricoMi/publish-unit-test-result-action@v2
-      if: always()
-      with:
-        files: test-results.xml
-        check_name: Pytest Results (${{ matrix.python-version }})
-        
-    - name: Upload HTML Report
-      uses: actions/upload-artifact@v3
-      with:
-        name: pytest-html-report-${{ matrix.python-version }}
-        path: report.html
-        
-    - name: Upload Coverage Report
-      uses: actions/upload-artifact@v3
-      with:
-        name: coverage-report-${{ matrix.python-version }}
-        path: htmlcov
+        pip install -e .
+        pip install pytest pytest-html pytest-cov
 
+    - name: Run tests and record results
+      id: run-tests
+      run: |
+        cd tests
+        # 运行测试并捕获原始控制台输出
+        TEST_OUTPUT=$(PYTHONPATH=../src pytest \
+          --cov=../src \
+          --cov-report=xml:../coverage-${{ matrix.python-version }}.xml \
+          --junitxml=../test-results-${{ matrix.python-version }}.xml \
+          --html=../report-${{ matrix.python-version }}.html \
+          --self-contained-html 2>&1)
+        
+        # 保存原始输出供后续使用
+        echo "TEST_OUTPUT<<EOF" >> $GITHUB_ENV
+        echo "$TEST_OUTPUT" >> $GITHUB_ENV
+        echo "EOF" >> $GITHUB_ENV
+
+        # 精确解析测试结果
+        passed=$(xmllint --xpath 'count(//testcase[not(skipped) and not(failure) and not(error)])' ../test-results-${{ matrix.python-version }}.xml || echo "0")
+        failures=$(xmllint --xpath 'count(//testcase[failure])' ../test-results-${{ matrix.python-version }}.xml || echo "0")
+        errors=$(xmllint --xpath 'count(//testcase[error])' ../test-results-${{ matrix.python-version }}.xml || echo "0")
+        skipped=$(xmllint --xpath 'count(//testcase[skipped])' ../test-results-${{ matrix.python-version }}.xml || echo "0")
+        xfailed=$(xmllint --xpath 'count(//testcase[contains(@name, "[xfail]")])' ../test-results-${{ matrix.python-version }}.xml || echo "0")
+        xpassed=$(xmllint --xpath 'count(//testcase[contains(@name, "[xpass]")])' ../test-results-${{ matrix.python-version }}.xml || echo "0")
+        actual_passed=$((passed - xpassed))
+
+        # 输出详细测试结果到job摘要
+        echo "### 📊 Python ${{ matrix.python-version }} Detailed Results" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        echo "$TEST_OUTPUT" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        
+        # 输出格式化摘要
+        echo "### 🔍 Test Summary" >> $GITHUB_STEP_SUMMARY
+        echo "| Metric | Count |" >> $GITHUB_STEP_SUMMARY
+        echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+        echo "| ✅ Passed | $actual_passed |" >> $GITHUB_STEP_SUMMARY
+        echo "| ❌ Failed | $failures |" >> $GITHUB_STEP_SUMMARY
+        echo "| ⏩ Skipped | $skipped |" >> $GITHUB_STEP_SUMMARY
+        echo "| 💥 Errors | $errors |" >> $GITHUB_STEP_SUMMARY
+        echo "| 🔶 XFailed | $xfailed |" >> $GITHUB_STEP_SUMMARY
+        echo "| ⚠️ XPassed | $xpassed |" >> $GITHUB_STEP_SUMMARY
+
+        # 设置输出变量
+        echo "passed=$actual_passed" >> $GITHUB_OUTPUT
+        echo "failed=$failures" >> $GITHUB_OUTPUT
+        echo "skipped=$skipped" >> $GITHUB_OUTPUT
+        echo "errors=$errors" >> $GITHUB_OUTPUT
+        echo "xfailed=$xfailed" >> $GITHUB_OUTPUT
+        echo "xpassed=$xpassed" >> $GITHUB_OUTPUT
+
+    - name: Upload test artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results-py${{ matrix.python-version }}
+        path: |
+          report-${{ matrix.python-version }}.html
+          coverage-${{ matrix.python-version }}.xml
+          test-results-${{ matrix.python-version }}.xml
+
+    outputs:
+      passed: ${{ steps.run-tests.outputs.passed }}
+      failed: ${{ steps.run-tests.outputs.failed }}
+      skipped: ${{ steps.run-tests.outputs.skipped }}
+      errors: ${{ steps.run-tests.outputs.errors }}
+      xfailed: ${{ steps.run-tests.outputs.xfailed }}
+      xpassed: ${{ steps.run-tests.outputs.xpassed }}
+
+  summary:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate final report
+        run: |
+          # 准备数据
+          declare -A results
+          for version in 3.8 3.9 3.10 3.11; do
+            py_ver=$(echo $version | tr -d '.')
+            
+            results["${version}_passed"]=${{ needs.test.outputs.passed }}
+            results["${version}_failed"]=${{ needs.test.outputs.failed }}
+            results["${version}_skipped"]=${{ needs.test.outputs.skipped }}
+            results["${version}_errors"]=${{ needs.test.outputs.errors }}
+            results["${version}_xfailed"]=${{ needs.test.outputs.xfailed }}
+            results["${version}_xpassed"]=${{ needs.test.outputs.xpassed }}
+          done
+
+          # 生成最终报告
+          echo "### 🧪 Test Results Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Python Version | ✅ Passed | ❌ Failed | ⏩ Skipped | 💥 Errors | 🔶 XFailed | ⚠️ XPassed |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------------|----------|----------|-----------|----------|----------|----------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 3.8 | ${results["3.8_passed"]} | ${results["3.8_failed"]} | ${results["3.8_skipped"]} | ${results["3.8_errors"]} | ${results["3.8_xfailed"]} | ${results["3.8_xpassed"]} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 3.9 | ${results["3.9_passed"]} | ${results["3.9_failed"]} | ${results["3.9_skipped"]} | ${results["3.9_errors"]} | ${results["3.9_xfailed"]} | ${results["3.9_xpassed"]} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 3.10 | ${results["3.10_passed"]} | ${results["3.10_failed"]} | ${results["3.10_skipped"]} | ${results["3.10_errors"]} | ${results["3.10_xfailed"]} | ${results["3.10_xpassed"]} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 3.11 | ${results["3.11_passed"]} | ${results["3.11_failed"]} | ${results["3.11_skipped"]} | ${results["3.11_errors"]} | ${results["3.11_xfailed"]} | ${results["3.11_xpassed"]} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📊 [View Detailed Reports]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)" >> $GITHUB_STEP_SUMMARY

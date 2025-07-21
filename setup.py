@@ -1,9 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="pytest-actions-report-demo",
-    version="0.1",
-    packages=find_packages(where="src"),
-    package_dir={"": "src"},
-    install_requires=[],
+    name="pytestshow",
+    packages=find_packages(where="src"),  # 自动发现src下的包
+    package_dir={"": "src"},  # 关键：指定包根目录为src
 )
