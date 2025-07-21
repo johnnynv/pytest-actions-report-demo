@@ -37,7 +37,6 @@ jobs:
       id: run-tests
       run: |
         cd tests
-        # 运行测试并捕获原始控制台输出
         TEST_OUTPUT=$(PYTHONPATH=../src pytest \
           --cov=../src \
           --cov-report=xml:../coverage-${{ matrix.python-version }}.xml \
@@ -45,12 +44,10 @@ jobs:
           --html=../report-${{ matrix.python-version }}.html \
           --self-contained-html 2>&1)
         
-        # 保存原始输出供后续使用
         echo "TEST_OUTPUT<<EOF" >> $GITHUB_ENV
         echo "$TEST_OUTPUT" >> $GITHUB_ENV
         echo "EOF" >> $GITHUB_ENV
 
-        # 精确解析测试结果
         passed=$(xmllint --xpath 'count(//testcase[not(skipped) and not(failure) and not(error)])' ../test-results-${{ matrix.python-version }}.xml || echo "0")
         failures=$(xmllint --xpath 'count(//testcase[failure])' ../test-results-${{ matrix.python-version }}.xml || echo "0")
         errors=$(xmllint --xpath 'count(//testcase[error])' ../test-results-${{ matrix.python-version }}.xml || echo "0")
@@ -59,13 +56,11 @@ jobs:
         xpassed=$(xmllint --xpath 'count(//testcase[contains(@name, "[xpass]")])' ../test-results-${{ matrix.python-version }}.xml || echo "0")
         actual_passed=$((passed - xpassed))
 
-        # 输出详细测试结果到job摘要
         echo "### 📊 Python ${{ matrix.python-version }} Detailed Results" >> $GITHUB_STEP_SUMMARY
         echo '```' >> $GITHUB_STEP_SUMMARY
         echo "$TEST_OUTPUT" >> $GITHUB_STEP_SUMMARY
         echo '```' >> $GITHUB_STEP_SUMMARY
         
-        # 输出格式化摘要
         echo "### 🔍 Test Summary" >> $GITHUB_STEP_SUMMARY
         echo "| Metric | Count |" >> $GITHUB_STEP_SUMMARY
         echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
@@ -76,7 +71,6 @@ jobs:
         echo "| 🔶 XFailed | $xfailed |" >> $GITHUB_STEP_SUMMARY
         echo "| ⚠️ XPassed | $xpassed |" >> $GITHUB_STEP_SUMMARY
 
-        # 设置输出变量
         echo "passed=$actual_passed" >> $GITHUB_OUTPUT
         echo "failed=$failures" >> $GITHUB_OUTPUT
         echo "skipped=$skipped" >> $GITHUB_OUTPUT
@@ -107,7 +101,6 @@ jobs:
     steps:
       - name: Generate final report
         run: |
-          # 准备数据
           declare -A results
           for version in 3.8 3.9 3.10 3.11; do
             py_ver=$(echo $version | tr -d '.')
@@ -120,7 +113,6 @@ jobs:
             results["${version}_xpassed"]=${{ needs.test.outputs.xpassed }}
           done
 
-          # 生成最终报告
           echo "### 🧪 Test Results Summary" >> $GITHUB_STEP_SUMMARY
           echo "| Python Version | ✅ Passed | ❌ Failed | ⏩ Skipped | 💥 Errors | 🔶 XFailed | ⚠️ XPassed |" >> $GITHUB_STEP_SUMMARY
           echo "|----------------|----------|----------|-----------|----------|----------|----------|" >> $GITHUB_STEP_SUMMARY
