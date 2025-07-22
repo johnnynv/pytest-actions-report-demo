@@ -8,4 +8,8 @@ Settings → Actions → General
 
 "Workflow permissions" setup as "Read and write permissions"
 
-2. Trigger to run
+Test Test
+
+123
+456
+000

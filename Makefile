@@ -40,4 +40,3 @@ help:
 	@echo "  make reports    - Generate test reports"
 	@echo "  make full       - Run tests with coverage and all reports"
 	@echo "  make clean      - Clean temporary files"
-
