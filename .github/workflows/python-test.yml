@@ -9,7 +9,7 @@ permissions:
   checks: write
   contents: read
   pull-requests: write
-  statuses: write 
+  statuses: write
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -17,10 +17,10 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.8", "3.9", "3.10", "3.11"]
-    
+
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v4
       with:
@@ -44,7 +44,7 @@ jobs:
           --junitxml=../test-results-${{ matrix.python-version }}.xml \
           --html=../report-${{ matrix.python-version }}.html \
           --self-contained-html 2>&1)
-        
+
         # Save raw output
         echo "TEST_OUTPUT<<EOF" >> $GITHUB_ENV
         echo "$TEST_OUTPUT" >> $GITHUB_ENV
@@ -62,7 +62,7 @@ jobs:
         echo '```' >> $GITHUB_STEP_SUMMARY
         echo "$TEST_OUTPUT" >> $GITHUB_STEP_SUMMARY
         echo '```' >> $GITHUB_STEP_SUMMARY
-        
+
         echo "### 🔍 Test Summary" >> $GITHUB_STEP_SUMMARY
         echo "| Metric | Count |" >> $GITHUB_STEP_SUMMARY
         echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
